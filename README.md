@@ -31,7 +31,8 @@ or:
 sudo python main_control_bbt.py
 
 
-Requirements:
+Requirements
+-----
 
 Evdev driver
 PiGpio library
