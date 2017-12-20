@@ -11,8 +11,7 @@ import numpy as np
 from hs5645mg_servo_sdk.hs5645mg_servo_controller import HS5645MGServoController
 
 # TOUCH_CONTROLLER_NAME = "eGalax Inc. USB TouchController"
-TOUCH_CONTROLLER_NAME = "eGalax Inc."
-# TOUCH_CONTROLLER_NAME = "Touch__KiT Touch  Computer INC."
+# TOUCH_CONTROLLER_NAME = "eGalax Inc."
 
 servo_controller = HS5645MGServoController()
 servo_controller.start()
@@ -40,8 +39,10 @@ _logger = None
 _keep_listening_touch_events = False
 _touch_controller_dev = None
 _last_ball_position_reading = (0, 0)
+send_position = True
 
 def _touch_events_listening_thread_func():
+    global _touch_controller_dev,_keep_listening_touch_events,_last_ball_position_reading
     if _logger is not None:
         _logger.debug("Starting listening to touch events.")
     while _keep_listening_touch_events:
@@ -59,7 +60,6 @@ def _touch_events_listening_thread_func():
                         ball_contact = True
                     else:
                         ball_contact = False
-
             else:
                 time.sleep(0.001)  # If there is no change from last loop, sleep 1ms
         except OSError:  # Does not catch the error! #TODO
@@ -68,6 +68,7 @@ def _touch_events_listening_thread_func():
         _logger.debug("Stopped listening to touch events.")
 
 def start_listening_touch_events():
+    global _touch_controller_dev,_keep_listening_touch_events
     if _logger is not None:
         _logger.info("Touch screen searching...")
     _touch_controller_dev = find_touch_controller_dev()
@@ -83,12 +84,14 @@ def start_listening_touch_events():
         _logger.info("Touch screen thread started!")
 
 def find_touch_controller_dev():
+    TOUCH_CONTROLLER_NAME = "Touch__KiT Touch  Computer INC."
     touch_controller_device = None
     # Initialize touch panel device
     devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
     for device in devices:
         if TOUCH_CONTROLLER_NAME in device.name:
             touch_controller_device = device
+            print(device.name)
     return touch_controller_device
 
 def get_ball_position_in_raw(): # To read position from outside of class in raw format
@@ -96,7 +99,7 @@ def get_ball_position_in_raw(): # To read position from outside of class in raw 
 
 def tcp_start():
     print("Starting TCP Server")
-    global _connected, _first_init, _try_reconnect, conn,send_position
+    global _connected, _first_init, _try_reconnect, conn,send_position,_close_signal
     try:
         while True:
             if _close_signal:
@@ -144,18 +147,17 @@ def receiver(conn):
             # Receiving from client
             recvdata = None
             try:
-                recvdata = conn.recv(100)
+                recvdata = conn.recv(9)
+                if recvdata:
+                    print(recvdata)
             except socket.error:
                 pass
-            if recvdata:
-                parsed = recvdata.split(",")
-                if str(parsed[0]) == 'servo_pos':
-                    servo_x = float(parsed[1])
-                    servo_y = float(parsed[2])
-
-                    if abs(servo_x)<=90 and abs(servo_y)<=90:
-                        servo_controller.set_degrees_bbt((servo_x,servo_y))
-
+                #parsed = recvdata.split(",")
+                #if len(parsed[0])>0:
+                #    servo_x = int(parsed[0])
+                #    servo_y = int(parsed[1])
+                ##servo_controller.set_duty_cycle_bbt((servo_x,servo_y))
+                #    print(servo_x,servo_y)
 
             if not recvdata and _try_reconnect:
                 print("No data received, will try to connect again")
@@ -179,7 +181,7 @@ def receiver(conn):
 
 def sender(conn):
     global _connected, _try_reconnect, data, _close_signal, ctrllrclass,send_position,message_update
-    global message_in_queue
+    global message_in_queue,send_position
     # try:
     while True:
         if _close_signal:
@@ -188,16 +190,17 @@ def sender(conn):
             # Receiving from client
             if _connected and send_position:
                 ball_position_raw = get_ball_position_in_raw()
-                data_x_raw = "{:.4f}".format(ball_position_raw[0])
-                data_y_raw = "{:.4f}".format(ball_position_raw[1])
                 #data_x_servo = "{:.4f}".format(ctrllrclass.current_servo_positions[0])
+                data_x_servo = "{:4d}".format(ball_position_raw[0])
+                data_y_servo = "{:4d}".format(ball_position_raw[1])
                 #data_y_servo = "{:.4f}".format(ctrllrclass.current_servo_positions[1])
-                data = "position," + data_x_raw + "," + data_y_raw + "\n"
+                data = data_x_servo + "," + data_y_servo + "\n"
 
                 try:
                     conn.send(data)
-                except socket.error:
-                    time.sleep(0.2)
+                except socket.error ,e :
+                    #print(e)
+                    time.sleep(0.001)
                     pass
             elif not _connected and _try_reconnect:
                 print("Connection is not online, will try to connect again")
@@ -206,7 +209,7 @@ def sender(conn):
                 print("Connection is not online, closing application")
                 break
 
-        time.sleep(0.01)
+        time.sleep(0.001)
 
     # except conn.error as msg:
     #     print("Connection Error: %s\n " % msg)
@@ -223,6 +226,7 @@ try:
         time.sleep(0.5)
 except KeyboardInterrupt:
     _close_signal = True
+    _keep_listening_touch_events = False
     pass
 
 
@@ -235,4 +239,5 @@ if not _connected:
     # s1.close()
 print("Closing TCP Server")
 time.sleep(1)
+print("Closing controller object")
 servo_controller.close()
