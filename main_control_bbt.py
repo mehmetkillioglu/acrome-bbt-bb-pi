@@ -62,7 +62,8 @@ def _touch_events_listening_thread_func():
                         ball_contact = False
             else:
                 time.sleep(0.001)  # If there is no change from last loop, sleep 1ms
-        except OSError:  # Does not catch the error! #TODO
+        except OSError,e:  # Does not catch the error! #TODO
+            #print(e)
             pass
     if _logger is not None:
         _logger.debug("Stopped listening to touch events.")
@@ -84,7 +85,9 @@ def start_listening_touch_events():
         _logger.info("Touch screen thread started!")
 
 def find_touch_controller_dev():
-    TOUCH_CONTROLLER_NAME = "Touch__KiT Touch  Computer INC."
+    #TOUCH_CONTROLLER_NAME = "Touch__KiT Touch  Computer INC."
+    TOUCH_CONTROLLER_NAME = "eGalax Inc."
+
     touch_controller_device = None
     # Initialize touch panel device
     devices = [evdev.InputDevice(fn) for fn in evdev.list_devices()]
@@ -148,16 +151,18 @@ def receiver(conn):
             recvdata = None
             try:
                 recvdata = conn.recv(9)
-                if recvdata:
-                    print(recvdata)
-            except socket.error:
+                    #print(recvdata)
+            except socket.error,e:
+                #print(e)
                 pass
-                #parsed = recvdata.split(",")
-                #if len(parsed[0])>0:
-                #    servo_x = int(parsed[0])
-                #    servo_y = int(parsed[1])
-                ##servo_controller.set_duty_cycle_bbt((servo_x,servo_y))
                 #    print(servo_x,servo_y)
+            if recvdata:
+                print(recvdata)
+                parsed = recvdata.split(",")
+                if len(parsed[0])>0:
+                    servo_x = int(parsed[0])
+                    servo_y = int(parsed[1])
+                    servo_controller.set_duty_cycle_bbt((servo_x,servo_y))
 
             if not recvdata and _try_reconnect:
                 print("No data received, will try to connect again")
@@ -169,7 +174,7 @@ def receiver(conn):
                 _close_signal = True
                 break
 
-        time.sleep(0.01)
+        time.sleep(0.005)
 
     # except conn.error as msg:
     #     print("Connection Error: %s\n " % msg)
@@ -200,7 +205,7 @@ def sender(conn):
                     conn.send(data)
                 except socket.error ,e :
                     #print(e)
-                    time.sleep(0.001)
+                    #time.sleep(0.001)
                     pass
             elif not _connected and _try_reconnect:
                 print("Connection is not online, will try to connect again")
